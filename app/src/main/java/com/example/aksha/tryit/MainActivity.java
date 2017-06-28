@@ -8,6 +8,7 @@ import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.widget.CardView;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
@@ -17,14 +18,22 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.aksha.tryit.Model.Feed;
+import com.example.aksha.tryit.Model.Thumbnail;
 import com.firebase.ui.auth.AuthUI;
 import com.firebase.ui.database.FirebaseRecyclerAdapter;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.crash.FirebaseCrash;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 import com.google.firebase.storage.UploadTask;
@@ -33,6 +42,7 @@ import com.squareup.picasso.Picasso;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -47,11 +57,28 @@ public class MainActivity extends AppCompatActivity {
     FirebaseStorage mStorage;
     RecyclerView recyclerView;
     private FirebaseRecyclerAdapter<Feed, ImageHolder> mAdapter;
+    private FirebaseRemoteConfig remoteConfig = FirebaseRemoteConfig.getInstance();
+    private int label_length;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        FirebaseCrash.log("MainActivity");
+        remoteConfig.setConfigSettings(new FirebaseRemoteConfigSettings
+                .Builder().setDeveloperModeEnabled(true)
+                .build());
+        HashMap<String, Object> defaults=new HashMap<>();
+        defaults.put("max_labels",1);
+        remoteConfig.setDefaults(defaults);
+        final Task<Void> fetch=remoteConfig.fetch(0);
+        fetch.addOnSuccessListener(this, new OnSuccessListener<Void>() {
+            @Override
+            public void onSuccess(Void aVoid) {
+                remoteConfig.activateFetched();
+                label_length= (int) remoteConfig.getLong("max_labels");
+            }
+        });
         initView();
 
 
@@ -99,9 +126,38 @@ public class MainActivity extends AppCompatActivity {
                 ImageHolder.class,
                 ref) {
             @Override
-            public void populateViewHolder(ImageHolder holder, Feed feed, int position) {
-                holder.setmImage(feed.getDownloadUrl(),getApplicationContext());
-                holder.mTitle.setText(feed.getTitle());
+            public void populateViewHolder(ImageHolder holder, Feed feed, final int position) {
+                holder.setmImage(feed.getDownloadUrl(), getApplicationContext());
+                String[] x=feed.getTitle().split(" ");
+                String str="";
+                for (int i = 0; i <label_length; i++) {
+                    str+="#"+x[i]+" ";
+                }
+                holder.mTitle.setText(str);
+                holder.parent.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        mDatabase.getReference().child("images")
+                                .addListenerForSingleValueEvent(new ValueEventListener() {
+                                    @Override
+                                    public void onDataChange(DataSnapshot dataSnapshot) {
+                                        int x = 0;
+                                        for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
+
+                                            if (x == position) {
+                                                Thumbnail thumbnail = snapshot.getValue(Thumbnail.class);
+                                                Log.i(TAG, "onDataChange: " + thumbnail.getThumbnail());
+                                            }
+                                            x++;
+                                        }
+                                    }
+
+                                    @Override
+                                    public void onCancelled(DatabaseError databaseError) {
+                                    }
+                                });
+                    }
+                });
             }
         };
         recyclerView.setAdapter(mAdapter);
@@ -110,16 +166,17 @@ public class MainActivity extends AppCompatActivity {
 
     public void uploadImage(byte[] photoBytes, String lastPathSegment) {
 
+        final DatabaseReference ref = mDatabase.getReference().child("feed").push();
         mStorage.getReference().child(mAuth.getCurrentUser().getUid()).child(lastPathSegment).putBytes(photoBytes)
                 .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
-            @Override
-            public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                    @Override
+                    public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
 
-                DatabaseReference ref = mDatabase.getReference().child("feed").push();
-                ref.setValue(new Feed(taskSnapshot.getDownloadUrl().toString(),
-                        mAuth.getCurrentUser().getUid(), taskSnapshot.getMetadata().getPath(),""));
-            }
-        }).addOnFailureListener(new OnFailureListener() {
+
+                        ref.setValue(new Feed(taskSnapshot.getDownloadUrl().toString(),
+                                mAuth.getCurrentUser().getUid(), taskSnapshot.getMetadata().getPath(), ""));
+                    }
+                }).addOnFailureListener(new OnFailureListener() {
             @Override
             public void onFailure(@NonNull Exception e) {
 
@@ -155,13 +212,12 @@ public class MainActivity extends AppCompatActivity {
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 50, baos);
                 byte[] photoBytes = baos.toByteArray();
-                uploadImage(photoBytes,uri.getLastPathSegment());
+                uploadImage(photoBytes, uri.getLastPathSegment());
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
     }
-
 
 
     public void openChooser(View view) {
@@ -174,11 +230,13 @@ public class MainActivity extends AppCompatActivity {
     public static class ImageHolder extends RecyclerView.ViewHolder {
         private final ImageView mImage;
         private final TextView mTitle;
+        private final CardView parent;
 
         public ImageHolder(View itemView) {
             super(itemView);
             mImage = (ImageView) itemView.findViewById(R.id.image_item);
             mTitle = (TextView) itemView.findViewById(R.id.title_item);
+            parent = (CardView) itemView.findViewById(R.id.parent);
         }
 
         public void setName(String name) {

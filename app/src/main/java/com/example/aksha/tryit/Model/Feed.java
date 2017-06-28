@@ -10,6 +10,7 @@ public class Feed {
     private String uid;
     private String filePath;
     private String title;
+    private String thumbnail;
 
     public String getDownloadUrl() {
         return downloadUrl;
@@ -54,5 +55,13 @@ public class Feed {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public String getThumbnail() {
+        return thumbnail;
+    }
+
+    public void setThumbnail(String thumbnail) {
+        this.thumbnail = thumbnail;
     }
 }
