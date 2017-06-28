@@ -1,8 +1,33 @@
 const functions = require('firebase-functions');
+const Vision = require('@google-cloud/vision');
+const admin = require('firebase-admin');
+admin.initializeApp(functions.config().firebase);
+const gcs = require('@google-cloud/storage')();
 
-// Create and Deploy Your First Cloud Functions
-// https://firebase.google.com/docs/functions/write-firebase-functions
-
-exports.helloWorld = functions.https.onRequest((request, response) => {
- response.send("Hello from Firebase!");
+const visionClient = Vision({
+    projectId: 'tryit-70fdc' 
 });
+const bucket = 'tryit-70fdc.appspot.com'; 
+
+exports.guessIt = functions.database.ref('/feed/{feedId}')
+.onWrite(event =>{
+
+    const node=event.data.val();
+    const fPath=node.filePath;
+    const file= gcs.bucket(bucket).file(fPath);
+
+    return visionClient.detectLabels(file)
+        .then(data =>{
+            return data[0];  
+        }).then(labels =>{
+            return admin.database()
+            .ref('feed')
+            .child(event.params.feedId)
+            .set({
+                downloadUrl: node.downloadUrl,
+                filePath: node.filePath,
+                uid: node.uid,
+                title: labels[0]
+            });
+        }); 
+}); 

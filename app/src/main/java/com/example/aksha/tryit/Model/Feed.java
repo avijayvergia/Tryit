@@ -9,6 +9,7 @@ public class Feed {
     private String downloadUrl;
     private String uid;
     private String filePath;
+    private String title;
 
     public String getDownloadUrl() {
         return downloadUrl;
@@ -38,10 +39,20 @@ public class Feed {
 
     }
 
-    public Feed(String downloadUrl, String uid, String filePath) {
+
+    public Feed(String downloadUrl, String uid, String filePath, String title) {
 
         this.downloadUrl = downloadUrl;
         this.uid = uid;
         this.filePath = filePath;
+        this.title=title;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
     }
 }

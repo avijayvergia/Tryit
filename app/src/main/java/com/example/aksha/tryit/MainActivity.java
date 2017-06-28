@@ -101,6 +101,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void populateViewHolder(ImageHolder holder, Feed feed, int position) {
                 holder.setmImage(feed.getDownloadUrl(),getApplicationContext());
+                holder.mTitle.setText(feed.getTitle());
             }
         };
         recyclerView.setAdapter(mAdapter);
@@ -116,7 +117,7 @@ public class MainActivity extends AppCompatActivity {
 
                 DatabaseReference ref = mDatabase.getReference().child("feed").push();
                 ref.setValue(new Feed(taskSnapshot.getDownloadUrl().toString(),
-                        mAuth.getCurrentUser().getUid(), taskSnapshot.getMetadata().getPath()));
+                        mAuth.getCurrentUser().getUid(), taskSnapshot.getMetadata().getPath(),""));
             }
         }).addOnFailureListener(new OnFailureListener() {
             @Override
@@ -124,8 +125,6 @@ public class MainActivity extends AppCompatActivity {
 
             }
         });
-
-
     }
 
     private void onSignedOutCleanUp() {
